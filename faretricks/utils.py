@@ -73,6 +73,14 @@ def select_indices_from_list(items, text='Please choose: '):
         return indices
 
 
+def input_while_empty(prompt):
+    value = ''
+    while not value.strip():
+        value = input(prompt)
+
+    return value
+
+
 def sort_by_shared_similarity(strings):
     similarity = collections.defaultdict(float)
 
