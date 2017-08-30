@@ -29,7 +29,7 @@ def _get_best_selector(root, target, recursive=True):
     return _Selector('nth-of-type', f'{target.name}:nth-of-type({nth:d})', root, target)
 
 
-def get_unique_selector_chain(root, target):
+def get_unique_selector_list(root, target):
     if root is target:
         return []
 
@@ -55,7 +55,7 @@ def get_unique_selector_chain(root, target):
 
         # If we found a direct selector from root to target this will return [], else it will return the best selector
         # for the sub-path from the current tag to the target.
-        next_selectors = get_unique_selector_chain(tag, target)
+        next_selectors = get_unique_selector_list(tag, target)
 
         # Extend the current list of selectors with the rest of the path
         selectors.extend(next_selectors)
@@ -69,10 +69,10 @@ def get_unique_selector_chain(root, target):
     ]
 
     # Attempt to get a good selector for the rest of the path.
-    selectors.extend(get_unique_selector_chain(path[-2], target))
+    selectors.extend(get_unique_selector_list(path[-2], target))
     return selectors
 
 
 @functools.lru_cache(None)
-def get_unique_selector_string(root, target):
-    return ' '.join(str(s) for s in get_unique_selector_chain(root, target))
+def get_unique_selector(root, target):
+    return ' '.join(str(s) for s in get_unique_selector_list(root, target))

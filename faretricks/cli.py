@@ -1,11 +1,13 @@
 import argparse
 import collections
 import sys
+import urllib.parse
 
 import requests
 
+from faretricks.fanficfare import render_fanficfare_adapter_template
 from faretricks.scrape import yield_headings, get_text, find_deepest_node, make_beautifulsoup
-from faretricks.spoon import get_unique_selector_string
+from faretricks.spoon import get_unique_selector
 from faretricks.utils import make_requests_session, sort_by_shared_similarity, yield_sorted_by_indices, \
     select_indices_from_list, interruptable
 
@@ -14,6 +16,7 @@ TIMEOUT = 60
 CONNECT_RETRIES = 3
 CONNECT_RETRY_DELAY = 10
 ERROR_EXIT_CODE = 1
+ENCODING = 'UTF-8'
 
 argument_parser = argparse.ArgumentParser()
 argument_parser.add_argument('url')
@@ -37,12 +40,12 @@ def _find_heading(soup, url):
     texts = yield_sorted_by_indices(texts, similarity_indices)
 
     # Create string representations of elements and their selectors for the selection
-    items = [f'{text!r}: {get_unique_selector_string(soup, heading)!r}' for heading, text in zip(headings, texts)]
+    items = [f'{text!r}: {get_unique_selector(soup, heading)!r}' for heading, text in zip(headings, texts)]
     index = select_indices_from_list(items, 'Please choose heading: ')[0]
     return headings[index]
 
 
-def find_toc_heading(soup, url):
+def find_toc_title(soup, url):
     return _find_heading(soup, url)
 
 
@@ -53,6 +56,7 @@ def find_toc_links(soup, url):
     items = [repr(text) for text in texts]
     indices = select_indices_from_list(items, 'Select a number of links to be included: ')
 
+    # Search upwards for first element that includes all candidate links
     candidates = list(yield_sorted_by_indices(candidates, indices))
     parent = candidates[0].parent
     while not set(candidates).issubset(set(parent('a', href=True))):
@@ -61,7 +65,7 @@ def find_toc_links(soup, url):
     return parent
 
 
-def find_chapter_heading(soup, url):
+def find_chapter_title(soup, url):
     return _find_heading(soup, url)
 
 
@@ -69,7 +73,12 @@ def find_chapter_heading(soup, url):
 def find_chapter_content(soup, url):
     beginning = input('Enter excerpt of the chapter beginning: ').lower()
     ending = input('Enter excerpt of the chapter ending: ').lower()
-    return find_deepest_node(soup, lambda text: beginning in text and ending in text)
+
+    def predicate(element):
+        text = get_text(element).lower()
+        return beginning in text and ending in text
+
+    return find_deepest_node(soup, predicate)
 
 
 def find_custom(soup, url):
@@ -82,21 +91,29 @@ def _main(arguments):
     soup = make_beautifulsoup(response.text)
 
     selectors = collections.OrderedDict()
-    for find in [find_toc_heading, find_toc_links]:
+    for find in [find_toc_title, find_toc_links]:
         element = find(soup, response.url) or find_custom(soup, response.url)
-        selectors[find] = get_unique_selector_string(soup, element)
+        selectors[find] = get_unique_selector(soup, element)
         print()
 
     url = input('Please enter chapter URL: ')
     response = requests.get(url)
     soup = make_beautifulsoup(response.text)
-    for find in [find_chapter_heading, find_chapter_content]:
+    for find in [find_chapter_title, find_chapter_content]:
         element = find(soup, response.url) or find_custom(soup, response.url)
-        selectors[find] = get_unique_selector_string(soup, element)
+        selectors[find] = get_unique_selector(soup, element)
         print()
 
-    for function_, selector in selectors.items():
-        print(f'{function_.__name__}: {selector!r}')
+    adapter_code = render_fanficfare_adapter_template(
+        url,
+        toc_title_pattern=selectors[find_toc_title],
+        toc_links_pattern=selectors[find_toc_links],
+        chapter_title_pattern=selectors[find_chapter_title],
+        chapter_content_pattern=selectors[find_chapter_content])
+
+    netloc = urllib.parse.urlsplit(url).netloc
+    with open(f'adapter_{netloc.replace(".", "")}.py', 'w', encoding=ENCODING) as file:
+        file.write(adapter_code)
 
 
 def main():

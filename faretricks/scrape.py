@@ -22,8 +22,7 @@ def find_deepest_node(soup, predicate):
     last_match = None
     while stack:
         element = stack.popleft()
-        text = get_text(element).lower()
-        if predicate(text):
+        if predicate(element):
             last_match = element
             stack.extend(element(recursive=False))
 
