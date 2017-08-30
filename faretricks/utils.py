@@ -1,10 +1,10 @@
 import collections
 import difflib
+import functools
 import itertools
 import operator
 import types
 
-import bs4
 import requests
 import retrying
 
@@ -28,6 +28,17 @@ def make_requests_session(arguments):
     return session
 
 
+def interruptable(function):
+    @functools.wraps(function)
+    def wrapped(*args, **kwargs):
+        try:
+            return function(*args, **kwargs)
+        except KeyboardInterrupt:
+            return
+
+    return wrapped
+
+
 def select_from_list(items, text='Please choose: '):
     count = len(items)
     for index, item in enumerate(items, start=1):
@@ -36,16 +47,23 @@ def select_from_list(items, text='Please choose: '):
     return input(text)
 
 
-# TODO: Ranges
+def _parse_index(string_):
+    if '-' in string_:
+        start, end = [part.strip() for part in string_.split('-')]
+        return range(int(start) - 1, int(end) - 1)
+
+    return [int(string_.strip()) - 1]
+
+
 def select_indices_from_list(items, text='Please choose: '):
     count = len(items)
     while True:
         values = select_from_list(items, text).split()
 
         try:
-            indices = [int(value.strip()) - 1 for value in values]
+            indices = list(itertools.chain(*(_parse_index(value) for value in values)))
         except ValueError:
-            print(f'{values!r} contains an invalud number, please try again.')
+            print(f'{values!r} contains an invalid number, please try again.')
             continue
 
         if any(index < 0 or index > count for index in indices):
@@ -53,10 +71,6 @@ def select_indices_from_list(items, text='Please choose: '):
             continue
 
         return indices
-
-
-def make_beautifulsoup(text, parser='html5lib'):
-    return bs4.BeautifulSoup(text, parser)
 
 
 def sort_by_shared_similarity(strings):

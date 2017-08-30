@@ -1,14 +1,13 @@
 import argparse
 import collections
-import functools
 import sys
 
 import requests
 
-from faretricks.scrape import yield_headings, get_text, find_deepest_node
+from faretricks.scrape import yield_headings, get_text, find_deepest_node, make_beautifulsoup
 from faretricks.spoon import get_unique_selector_string
-from faretricks.utils import make_requests_session, make_beautifulsoup, sort_by_shared_similarity, \
-    yield_sorted_by_indices, select_indices_from_list
+from faretricks.utils import make_requests_session, sort_by_shared_similarity, yield_sorted_by_indices, \
+    select_indices_from_list, interruptable
 
 USER_AGENT = 'Mozilla/5.0 (X11; Linux x86_64; rv:55.0) Gecko/20100101 Firefox/55.0'
 TIMEOUT = 60
@@ -23,17 +22,6 @@ argument_parser.add_argument('--connect-timeout', '-c', type=float, default=TIME
 argument_parser.add_argument('--read-timeout', '-r', type=float, default=TIMEOUT)
 argument_parser.add_argument('--connect-retries', '-R', type=int, default=CONNECT_RETRIES)
 argument_parser.add_argument('--connect-retry-delay', '-d', type=float, default=CONNECT_RETRY_DELAY)
-
-
-def interruptable(function):
-    @functools.wraps(function)
-    def wrapped(*args, **kwargs):
-        try:
-            return function(*args, **kwargs)
-        except KeyboardInterrupt:
-            return
-
-    return wrapped
 
 
 @interruptable
@@ -81,8 +69,7 @@ def find_chapter_heading(soup, url):
 def find_chapter_content(soup, url):
     beginning = input('Enter excerpt of the chapter beginning: ').lower()
     ending = input('Enter excerpt of the chapter ending: ').lower()
-    predicate = lambda text: beginning in text and ending in text
-    return find_deepest_node(soup, predicate)
+    return find_deepest_node(soup, lambda text: beginning in text and ending in text)
 
 
 def find_custom(soup, url):
